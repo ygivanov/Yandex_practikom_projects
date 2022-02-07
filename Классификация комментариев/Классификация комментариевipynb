@@ -1,0 +1,2191 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Проект для «Викишоп»"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Интернет-магазин «Викишоп» запускает новый сервис. Теперь пользователи могут редактировать и дополнять описания товаров, как в вики-сообществах. То есть клиенты предлагают свои правки и комментируют изменения других. Магазину нужен инструмент, который будет искать токсичные комментарии и отправлять их на модерацию. \n",
+    "\n",
+    "Обучите модель классифицировать комментарии на позитивные и негативные. В вашем распоряжении набор данных с разметкой о токсичности правок.\n",
+    "\n",
+    "Постройте модель со значением метрики качества *F1* не меньше 0.75. \n",
+    "\n",
+    "**Инструкция по выполнению проекта**\n",
+    "\n",
+    "1. Загрузите и подготовьте данные.\n",
+    "2. Обучите разные модели. \n",
+    "3. Сделайте выводы.\n",
+    "\n",
+    "\n",
+    "**Описание данных**\n",
+    "\n",
+    "Данные находятся в файле `toxic_comments.csv`. Столбец *text* в нём содержит текст комментария, а *toxic* — целевой признак."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Подготовка данных"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "from sklearn.utils import shuffle\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "import re\n",
+    "from sklearn.metrics import f1_score\n",
+    "import nltk\n",
+    "from nltk.corpus import wordnet\n",
+    "from nltk.corpus import stopwords\n",
+    "from nltk.stem import WordNetLemmatizer \n",
+    "from sklearn.feature_extraction.text import TfidfVectorizer\n",
+    "from sklearn.model_selection import GridSearchCV\n",
+    "from sklearn.model_selection import ShuffleSplit\n",
+    "from sklearn.linear_model import LogisticRegression\n",
+    "from sklearn.model_selection import cross_val_score\n",
+    "from sklearn.dummy import DummyClassifier\n",
+    "import warnings\n",
+    "warnings.filterwarnings('ignore')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "<class 'pandas.core.frame.DataFrame'>\n",
+      "RangeIndex: 159571 entries, 0 to 159570\n",
+      "Data columns (total 2 columns):\n",
+      "text     159571 non-null object\n",
+      "toxic    159571 non-null int64\n",
+      "dtypes: int64(1), object(1)\n",
+      "memory usage: 2.4+ MB\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "None"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>text</th>\n",
+       "      <th>toxic</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>Explanation\\nWhy the edits made under my usern...</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>D'aww! He matches this background colour I'm s...</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>Hey man, I'm really not trying to edit war. It...</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>\"\\nMore\\nI can't make any real suggestions on ...</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>You, sir, are my hero. Any chance you remember...</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                                text  toxic\n",
+       "0  Explanation\\nWhy the edits made under my usern...      0\n",
+       "1  D'aww! He matches this background colour I'm s...      0\n",
+       "2  Hey man, I'm really not trying to edit war. It...      0\n",
+       "3  \"\\nMore\\nI can't make any real suggestions on ...      0\n",
+       "4  You, sir, are my hero. Any chance you remember...      0"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "df = pd.read_csv('/datasets/toxic_comments.csv')\n",
+    "display(df.info())\n",
+    "display(df.head(5))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Наш датасет состоит всего из двух столбцов, а это - текст комментария и разметка на положительный и отрицательный. Текс у нас не обработанный нужно этим заняться. Для начала посмотрим как у нас распределен целевой признак, далее займемся предобработкой текста."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "\u001b[1m Распределение целевого признака \u001b[0m\n"
+     ]
+    },
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 864x576 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "print('\\033[1m Распределение целевого признака \\033[0m')\n",
+    "fig, ax = plt.subplots(figsize=(12, 8))\n",
+    "plt.xticks(rotation=90)\n",
+    "sns.countplot(df['toxic'])\n",
+    "plt.xlabel('Целевой признак')\n",
+    "plt.ylabel('Плотность частоты')\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0    143346\n",
+       "1     16225\n",
+       "Name: toxic, dtype: int64"
+      ]
+     },
+     "execution_count": 5,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df['toxic'].value_counts()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Положительных комментариев в нас в разы больше чем негативных, это нужно будет учесть в дальнейшем при обучении моделей"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Так как текст комментариев сейчас не пригоден для анализа, его нужно почистить от лишних символов и лемматизировать этим и займемся"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[nltk_data] Downloading package wordnet to /home/jovyan/nltk_data...\n",
+      "[nltk_data]   Package wordnet is already up-to-date!\n",
+      "[nltk_data] Downloading package averaged_perceptron_tagger to\n",
+      "[nltk_data]     /home/jovyan/nltk_data...\n",
+      "[nltk_data]   Package averaged_perceptron_tagger is already up-to-\n",
+      "[nltk_data]       date!\n",
+      "[nltk_data] Downloading package punkt to /home/jovyan/nltk_data...\n",
+      "[nltk_data]   Package punkt is already up-to-date!\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "True"
+      ]
+     },
+     "execution_count": 7,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "nltk.download('wordnet')\n",
+    "nltk.download('averaged_perceptron_tagger')\n",
+    "nltk.download('punkt')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def get_wordnet_pos(word):\n",
+    "    tag = nltk.pos_tag([word])[0][1][0].upper()\n",
+    "    tag_dict = {\"J\": wordnet.ADJ,\n",
+    "                \"N\": wordnet.NOUN,\n",
+    "                \"V\": wordnet.VERB,\n",
+    "                \"R\": wordnet.ADV}\n",
+    "    return tag_dict.get(tag, wordnet.NOUN)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def lemmatize(text):\n",
+    "    lemmatizer = WordNetLemmatizer()\n",
+    "    lemm_list = nltk.word_tokenize(text)\n",
+    "    lemm_text = ' '.join([lemmatizer.lemmatize(w, get_wordnet_pos(w)) for w in lemm_list])      \n",
+    "    return lemm_text"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def clear_text(text):\n",
+    "    clear_text = re.sub(r'[^a-zA-Z]', ' ', text)\n",
+    "    clear_text = clear_text.lower().split()\n",
+    "    return ' '.join(clear_textxt)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Выведем первую строчку наших комментариев и сравним ее с лемматиризоранной и отчищенной от лишнего"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "\"Explanation\\nWhy the edits made under my username Hardcore Metallica Fan were reverted? They weren't vandalisms, just closure on some GAs after I voted at New York Dolls FAC. And please don't remove the template from the talk page since I'm retired now.89.205.38.27\""
+      ]
+     },
+     "execution_count": 11,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df.loc[0, 'text']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'explanation why the edits make under my username hardcore metallica fan be revert they weren t vandalism just closure on some gas after i vote at new york doll fac and please don t remove the template from the talk page since i m retire now'"
+      ]
+     },
+     "execution_count": 12,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "lemmatize(clear_text(df.loc[0, 'text']))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Лемматизация выполнена, у нас получился пригодный текст для дальнейшего анализа, лишние символы убраны"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "CPU times: user 18min 19s, sys: 1min 47s, total: 20min 7s\n",
+      "Wall time: 20min 8s\n"
+     ]
+    }
+   ],
+   "source": [
+    "%%time\n",
+    "df['lemm_text'] = df['text'].apply(lambda text: lemmatize(clear_text(text)))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>text</th>\n",
+       "      <th>toxic</th>\n",
+       "      <th>lemm_text</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>Explanation\\nWhy the edits made under my usern...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>explanation why the edits make under my userna...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>D'aww! He matches this background colour I'm s...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>d aww he match this background colour i m seem...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>Hey man, I'm really not trying to edit war. It...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>hey man i m really not try to edit war it s ju...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>\"\\nMore\\nI can't make any real suggestions on ...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>more i can t make any real suggestion on impro...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>You, sir, are my hero. Any chance you remember...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>you sir be my hero any chance you remember wha...</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                                text  toxic  \\\n",
+       "0  Explanation\\nWhy the edits made under my usern...      0   \n",
+       "1  D'aww! He matches this background colour I'm s...      0   \n",
+       "2  Hey man, I'm really not trying to edit war. It...      0   \n",
+       "3  \"\\nMore\\nI can't make any real suggestions on ...      0   \n",
+       "4  You, sir, are my hero. Any chance you remember...      0   \n",
+       "\n",
+       "                                           lemm_text  \n",
+       "0  explanation why the edits make under my userna...  \n",
+       "1  d aww he match this background colour i m seem...  \n",
+       "2  hey man i m really not try to edit war it s ju...  \n",
+       "3  more i can t make any real suggestion on impro...  \n",
+       "4  you sir be my hero any chance you remember wha...  "
+      ]
+     },
+     "execution_count": 14,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df.head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Разделим наши данные на тренировочную и тестовую выборки. Для теста оставим 25% датасета"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "train_features, test_features, train_target, test_target = train_test_split(\n",
+    "    df['lemm_text'], df['toxic'], test_size=0.25, random_state=42)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "((119678,), (39893,), (119678,), (39893,))"
+      ]
+     },
+     "execution_count": 16,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "train_features.shape, test_features.shape, train_target.shape, test_target.shape"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Мы уже очистили от лишнего наши данные и привели текст к начальной форме, теперь необходимо убрать лишние слова, так как при дальнейшем превращении их в признаки они будут нам мешать и модель может обучиться не верно"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "train_corpus = train_features.values\n",
+    "test_corpus = test_features.values"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[nltk_data] Downloading package stopwords to /home/jovyan/nltk_data...\n",
+      "[nltk_data]   Package stopwords is already up-to-date!\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "True"
+      ]
+     },
+     "execution_count": 18,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "nltk.download('stopwords')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "stop_words = set(stopwords.words('english'))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Векторизация данных методом TFIDF"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "count_tf_idf = TfidfVectorizer(stop_words=stop_words)\n",
+    "train_tf_idf = count_tf_idf.fit_transform(train_corpus)\n",
+    "test_tf_idf = count_tf_idf.transform(test_corpus)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Размер обучающей матрицы: (119678, 127788)\n",
+      "Размер тестовой матрицы: (39893, 127788)\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"Размер обучающей матрицы:\", train_tf_idf.shape), \n",
+    "print(\"Размер тестовой матрицы:\", test_tf_idf.shape)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Напишем функцию для проверки нашей модели. Для этого мы будем использвать метрику **F1**"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def scoring(fitted_model):\n",
+    "    test_pred = fitted_model.predict(test_tf_idf)\n",
+    "    test_f1 = f1_score(test_target, test_pred)\n",
+    "    \n",
+    "    print('F1 на тестовой выборке: {:.3f}'.format(test_f1))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Обучение модели"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Для данной задачи мы обучим модель логистической регресси, она проста, но в тоже время эффективна. Так как наш заказчик это интернет магазин, разумнее истользовать простую модель. В дальнейшем заказчик сможет поддерживать ее в работоспособном состоянии и ее не так будет сложно доработать, нежели более сложные модели, например, Catboost Regression"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "cv = ShuffleSplit(n_splits=2, test_size=0.25, random_state=42)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "log_reg = LogisticRegression(random_state=42, class_weight='balanced')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "log_reg_params = {'C': np.linspace(0.0001, 100, 10)}"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "CPU times: user 8min 5s, sys: 7min 40s, total: 15min 45s\n",
+      "Wall time: 15min 46s\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "GridSearchCV(cv='warn', error_score='raise-deprecating',\n",
+       "             estimator=LogisticRegression(C=1.0, class_weight='balanced',\n",
+       "                                          dual=False, fit_intercept=True,\n",
+       "                                          intercept_scaling=1, l1_ratio=None,\n",
+       "                                          max_iter=100, multi_class='warn',\n",
+       "                                          n_jobs=None, penalty='l2',\n",
+       "                                          random_state=42, solver='warn',\n",
+       "                                          tol=0.0001, verbose=0,\n",
+       "                                          warm_start=False),\n",
+       "             iid='warn', n_jobs=None,\n",
+       "             param_grid={'C': array([1.00000e-04, 1.11112e+01, 2.22223e+01, 3.33334e+01, 4.44445e+01,\n",
+       "       5.55556e+01, 6.66667e+01, 7.77778e+01, 8.88889e+01, 1.00000e+02])},\n",
+       "             pre_dispatch='2*n_jobs', refit=True, return_train_score=False,\n",
+       "             scoring='f1', verbose=0)"
+      ]
+     },
+     "execution_count": 26,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%%timea\n",
+    "log_reg_grid = GridSearchCV(log_reg, log_reg_params, scoring='f1')\n",
+    "log_reg_grid.fit(train_tf_idf, train_target)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "best parameters:  {'C': 11.1112}\n",
+      "best scores:  0.7535383006507084\n"
+     ]
+    }
+   ],
+   "source": [
+    "print('best parameters: ', log_reg_grid.best_params_)\n",
+    "print('best scores: ', log_reg_grid.best_score_)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "LogisticRegression(C=11.1112, class_weight='balanced', dual=False,\n",
+       "                   fit_intercept=True, intercept_scaling=1, l1_ratio=None,\n",
+       "                   max_iter=100, multi_class='warn', n_jobs=None, penalty='l2',\n",
+       "                   random_state=42, solver='warn', tol=0.0001, verbose=0,\n",
+       "                   warm_start=False)"
+      ]
+     },
+     "execution_count": 28,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "log_reg_grid.best_estimator_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "F1 на тестовой выборке: 0.765\n",
+      "CPU times: user 18 ms, sys: 861 µs, total: 18.9 ms\n",
+      "Wall time: 17 ms\n"
+     ]
+    }
+   ],
+   "source": [
+    "%%time\n",
+    "scoring(log_reg_grid.best_estimator_)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Мы получили не плохой результат на тестовой выборке, значение метрики F1 = 0.765"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Выводы"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Мы разработали и обучили модель для классификации комментариев на негативные и положительные. Наш заказчик интернет-магазин \"Викишоп\" только запускает свой сервис и на данном этапе мы рекомендуем ему использовать именно данную модель, так как она проста в интеграции и первичной настройке. В дальнейшем рекомендация для улучшения качества сервиса использовать модели градиентного бустинка, а именно Catboost или Lightgbm."
+   ]
+  }
+ ],
+ "metadata": {
+  "ExecuteTimeLog": [
+   {
+    "duration": 1437,
+    "start_time": "2021-07-26T20:26:44.582Z"
+   },
+   {
+    "duration": 2486,
+    "start_time": "2021-07-26T20:27:18.213Z"
+   },
+   {
+    "duration": 788,
+    "start_time": "2021-07-26T20:27:53.362Z"
+   },
+   {
+    "duration": 747,
+    "start_time": "2021-07-26T20:28:05.691Z"
+   },
+   {
+    "duration": 782,
+    "start_time": "2021-07-26T20:28:12.247Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-26T20:29:26.392Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-26T20:29:37.260Z"
+   },
+   {
+    "duration": 801,
+    "start_time": "2021-07-26T20:29:54.315Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-26T20:32:13.401Z"
+   },
+   {
+    "duration": 16,
+    "start_time": "2021-07-26T20:33:40.663Z"
+   },
+   {
+    "duration": 10,
+    "start_time": "2021-07-26T20:36:50.144Z"
+   },
+   {
+    "duration": 1499,
+    "start_time": "2021-07-26T20:37:08.912Z"
+   },
+   {
+    "duration": 797,
+    "start_time": "2021-07-26T20:37:10.413Z"
+   },
+   {
+    "duration": 40,
+    "start_time": "2021-07-26T20:40:51.383Z"
+   },
+   {
+    "duration": 74,
+    "start_time": "2021-07-26T20:40:52.671Z"
+   },
+   {
+    "duration": 624,
+    "start_time": "2021-07-26T20:40:57.727Z"
+   },
+   {
+    "duration": 50,
+    "start_time": "2021-07-26T20:41:08.742Z"
+   },
+   {
+    "duration": 531,
+    "start_time": "2021-07-26T20:41:10.382Z"
+   },
+   {
+    "duration": 515,
+    "start_time": "2021-07-26T20:43:16.049Z"
+   },
+   {
+    "duration": 40,
+    "start_time": "2021-07-26T20:45:59.691Z"
+   },
+   {
+    "duration": 525,
+    "start_time": "2021-07-26T20:46:12.177Z"
+   },
+   {
+    "duration": 42,
+    "start_time": "2021-07-26T20:46:58.137Z"
+   },
+   {
+    "duration": 569,
+    "start_time": "2021-07-26T20:46:58.946Z"
+   },
+   {
+    "duration": 38,
+    "start_time": "2021-07-26T20:48:17.860Z"
+   },
+   {
+    "duration": 565,
+    "start_time": "2021-07-26T20:48:18.747Z"
+   },
+   {
+    "duration": 464,
+    "start_time": "2021-07-27T16:08:43.061Z"
+   },
+   {
+    "duration": 1536,
+    "start_time": "2021-07-27T16:08:46.490Z"
+   },
+   {
+    "duration": 812,
+    "start_time": "2021-07-27T16:08:48.029Z"
+   },
+   {
+    "duration": 43,
+    "start_time": "2021-07-27T16:08:50.366Z"
+   },
+   {
+    "duration": 1374,
+    "start_time": "2021-07-27T16:09:00.741Z"
+   },
+   {
+    "duration": 51,
+    "start_time": "2021-07-27T16:09:13.573Z"
+   },
+   {
+    "duration": 859,
+    "start_time": "2021-07-27T16:09:14.620Z"
+   },
+   {
+    "duration": 775,
+    "start_time": "2021-07-27T16:09:22.041Z"
+   },
+   {
+    "duration": 932,
+    "start_time": "2021-07-27T16:09:31.137Z"
+   },
+   {
+    "duration": 313,
+    "start_time": "2021-07-27T17:44:49.596Z"
+   },
+   {
+    "duration": 1485,
+    "start_time": "2021-07-27T17:44:52.398Z"
+   },
+   {
+    "duration": 812,
+    "start_time": "2021-07-27T17:44:53.886Z"
+   },
+   {
+    "duration": 41,
+    "start_time": "2021-07-27T17:44:55.821Z"
+   },
+   {
+    "duration": 639,
+    "start_time": "2021-07-27T17:45:09.233Z"
+   },
+   {
+    "duration": 44,
+    "start_time": "2021-07-27T17:46:00.336Z"
+   },
+   {
+    "duration": 565,
+    "start_time": "2021-07-27T17:46:22.839Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T17:49:33.467Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T17:49:38.439Z"
+   },
+   {
+    "duration": 514,
+    "start_time": "2021-07-27T17:49:40.521Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T17:50:00.171Z"
+   },
+   {
+    "duration": 41,
+    "start_time": "2021-07-27T17:50:04.672Z"
+   },
+   {
+    "duration": 546,
+    "start_time": "2021-07-27T17:50:06.560Z"
+   },
+   {
+    "duration": 2862,
+    "start_time": "2021-07-27T18:20:51.925Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T18:21:02.699Z"
+   },
+   {
+    "duration": 1163,
+    "start_time": "2021-07-27T18:21:09.478Z"
+   },
+   {
+    "duration": 623,
+    "start_time": "2021-07-27T18:21:49.298Z"
+   },
+   {
+    "duration": 65,
+    "start_time": "2021-07-27T18:22:08.065Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T18:22:08.877Z"
+   },
+   {
+    "duration": 270,
+    "start_time": "2021-07-27T18:22:35.161Z"
+   },
+   {
+    "duration": 539,
+    "start_time": "2021-07-27T18:22:56.908Z"
+   },
+   {
+    "duration": 271,
+    "start_time": "2021-07-27T18:26:54.389Z"
+   },
+   {
+    "duration": 506,
+    "start_time": "2021-07-27T18:26:55.938Z"
+   },
+   {
+    "duration": 41,
+    "start_time": "2021-07-27T18:27:29.004Z"
+   },
+   {
+    "duration": 583,
+    "start_time": "2021-07-27T18:27:30.060Z"
+   },
+   {
+    "duration": 606,
+    "start_time": "2021-07-27T18:28:49.312Z"
+   },
+   {
+    "duration": 7,
+    "start_time": "2021-07-27T18:28:58.101Z"
+   },
+   {
+    "duration": 6,
+    "start_time": "2021-07-27T18:32:34.758Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T18:32:50.095Z"
+   },
+   {
+    "duration": 599,
+    "start_time": "2021-07-27T18:32:51.230Z"
+   },
+   {
+    "duration": 9,
+    "start_time": "2021-07-27T18:33:05.214Z"
+   },
+   {
+    "duration": 41,
+    "start_time": "2021-07-27T18:33:41.600Z"
+   },
+   {
+    "duration": 89,
+    "start_time": "2021-07-27T18:34:22.617Z"
+   },
+   {
+    "duration": 157665,
+    "start_time": "2021-07-27T18:37:03.536Z"
+   },
+   {
+    "duration": 14,
+    "start_time": "2021-07-27T18:41:14.555Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T18:42:46.230Z"
+   },
+   {
+    "duration": 3105,
+    "start_time": "2021-07-27T18:43:16.831Z"
+   },
+   {
+    "duration": 12,
+    "start_time": "2021-07-27T18:43:42.845Z"
+   },
+   {
+    "duration": 145591,
+    "start_time": "2021-07-27T18:45:42.262Z"
+   },
+   {
+    "duration": 13,
+    "start_time": "2021-07-27T18:48:07.856Z"
+   },
+   {
+    "duration": 261,
+    "start_time": "2021-07-27T18:49:03.908Z"
+   },
+   {
+    "duration": 252,
+    "start_time": "2021-07-27T18:49:06.664Z"
+   },
+   {
+    "duration": 8,
+    "start_time": "2021-07-27T18:49:15.024Z"
+   },
+   {
+    "duration": 7,
+    "start_time": "2021-07-27T18:49:16.488Z"
+   },
+   {
+    "duration": 2954,
+    "start_time": "2021-07-27T18:49:49.272Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T19:01:09.047Z"
+   },
+   {
+    "duration": 8,
+    "start_time": "2021-07-27T19:01:11.630Z"
+   },
+   {
+    "duration": 2844,
+    "start_time": "2021-07-27T19:01:12.846Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T19:03:01.959Z"
+   },
+   {
+    "duration": 10,
+    "start_time": "2021-07-27T19:03:03.730Z"
+   },
+   {
+    "duration": 1512,
+    "start_time": "2021-07-27T19:03:04.320Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T19:03:12.927Z"
+   },
+   {
+    "duration": 10,
+    "start_time": "2021-07-27T19:03:14.411Z"
+   },
+   {
+    "duration": 11019,
+    "start_time": "2021-07-27T19:03:15.471Z"
+   },
+   {
+    "duration": 312,
+    "start_time": "2021-07-27T19:23:35.826Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T19:23:51.124Z"
+   },
+   {
+    "duration": 310,
+    "start_time": "2021-07-27T19:24:09.875Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T19:26:11.388Z"
+   },
+   {
+    "duration": 798,
+    "start_time": "2021-07-27T19:26:12.358Z"
+   },
+   {
+    "duration": 11034,
+    "start_time": "2021-07-27T19:30:27.568Z"
+   },
+   {
+    "duration": 13,
+    "start_time": "2021-07-27T19:30:49.320Z"
+   },
+   {
+    "duration": 6901,
+    "start_time": "2021-07-27T19:31:34.943Z"
+   },
+   {
+    "duration": 14,
+    "start_time": "2021-07-27T19:31:43.199Z"
+   },
+   {
+    "duration": 10240,
+    "start_time": "2021-07-27T19:32:14.303Z"
+   },
+   {
+    "duration": 14,
+    "start_time": "2021-07-27T19:32:26.215Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T19:35:50.959Z"
+   },
+   {
+    "duration": 345,
+    "start_time": "2021-07-27T19:40:44.764Z"
+   },
+   {
+    "duration": 27533,
+    "start_time": "2021-07-27T19:40:58.309Z"
+   },
+   {
+    "duration": 80491,
+    "start_time": "2021-07-27T19:41:27.517Z"
+   },
+   {
+    "duration": 19,
+    "start_time": "2021-07-27T19:42:49.674Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T19:43:25.931Z"
+   },
+   {
+    "duration": 108349,
+    "start_time": "2021-07-27T19:44:55.062Z"
+   },
+   {
+    "duration": 24,
+    "start_time": "2021-07-27T19:50:29.906Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T19:51:29.483Z"
+   },
+   {
+    "duration": 151434,
+    "start_time": "2021-07-27T19:52:48.491Z"
+   },
+   {
+    "duration": 29,
+    "start_time": "2021-07-27T20:00:08.594Z"
+   },
+   {
+    "duration": 149437,
+    "start_time": "2021-07-27T20:03:17.013Z"
+   },
+   {
+    "duration": 146906,
+    "start_time": "2021-07-27T20:07:17.972Z"
+   },
+   {
+    "duration": 1077,
+    "start_time": "2021-07-27T20:10:18.397Z"
+   },
+   {
+    "duration": 148169,
+    "start_time": "2021-07-27T20:12:26.350Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T20:15:36.776Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T20:16:30.757Z"
+   },
+   {
+    "duration": 258,
+    "start_time": "2021-07-27T20:21:50.844Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T20:22:03.419Z"
+   },
+   {
+    "duration": 6,
+    "start_time": "2021-07-27T20:22:06.322Z"
+   },
+   {
+    "duration": 272,
+    "start_time": "2021-07-27T20:22:10.779Z"
+   },
+   {
+    "duration": 6,
+    "start_time": "2021-07-27T20:22:14.795Z"
+   },
+   {
+    "duration": 270,
+    "start_time": "2021-07-27T20:25:08.567Z"
+   },
+   {
+    "duration": 38,
+    "start_time": "2021-07-27T20:25:13.540Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T20:25:25.749Z"
+   },
+   {
+    "duration": 44,
+    "start_time": "2021-07-27T20:25:49.517Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T20:25:51.442Z"
+   },
+   {
+    "duration": 43,
+    "start_time": "2021-07-27T20:26:18.310Z"
+   },
+   {
+    "duration": 6,
+    "start_time": "2021-07-27T20:26:19.237Z"
+   },
+   {
+    "duration": 134,
+    "start_time": "2021-07-27T20:31:57.184Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T20:32:18.111Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T20:32:29.332Z"
+   },
+   {
+    "duration": 29,
+    "start_time": "2021-07-27T20:33:41.313Z"
+   },
+   {
+    "duration": 282,
+    "start_time": "2021-07-27T20:33:54.428Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T20:34:19.497Z"
+   },
+   {
+    "duration": 13,
+    "start_time": "2021-07-27T20:34:23.249Z"
+   },
+   {
+    "duration": 9,
+    "start_time": "2021-07-27T20:34:38.323Z"
+   },
+   {
+    "duration": 427,
+    "start_time": "2021-07-27T20:35:33.495Z"
+   },
+   {
+    "duration": 290,
+    "start_time": "2021-07-27T20:36:53.970Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T20:37:02.788Z"
+   },
+   {
+    "duration": 6797,
+    "start_time": "2021-07-27T20:41:29.068Z"
+   },
+   {
+    "duration": 1564,
+    "start_time": "2021-07-27T20:41:45.221Z"
+   },
+   {
+    "duration": 808,
+    "start_time": "2021-07-27T20:41:47.588Z"
+   },
+   {
+    "duration": 145421,
+    "start_time": "2021-07-27T20:41:51.197Z"
+   },
+   {
+    "duration": 26,
+    "start_time": "2021-07-27T20:44:43.518Z"
+   },
+   {
+    "duration": 109,
+    "start_time": "2021-07-27T20:45:01.087Z"
+   },
+   {
+    "duration": 18,
+    "start_time": "2021-07-27T20:45:25.761Z"
+   },
+   {
+    "duration": 13,
+    "start_time": "2021-07-27T20:45:26.481Z"
+   },
+   {
+    "duration": 6495,
+    "start_time": "2021-07-27T20:46:17.185Z"
+   },
+   {
+    "duration": 6611,
+    "start_time": "2021-07-27T20:46:39.952Z"
+   },
+   {
+    "duration": 604,
+    "start_time": "2021-07-27T20:47:01.992Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-27T20:47:52.024Z"
+   },
+   {
+    "duration": 293,
+    "start_time": "2021-07-27T20:47:56.464Z"
+   },
+   {
+    "duration": 499,
+    "start_time": "2021-07-27T20:48:24.768Z"
+   },
+   {
+    "duration": 585,
+    "start_time": "2021-07-27T20:55:08.126Z"
+   },
+   {
+    "duration": 458,
+    "start_time": "2021-07-27T20:56:19.157Z"
+   },
+   {
+    "duration": 494,
+    "start_time": "2021-07-27T20:56:45.333Z"
+   },
+   {
+    "duration": 446,
+    "start_time": "2021-07-27T20:56:57.461Z"
+   },
+   {
+    "duration": 1230,
+    "start_time": "2021-07-27T20:58:01.054Z"
+   },
+   {
+    "duration": 674,
+    "start_time": "2021-07-27T20:58:11.606Z"
+   },
+   {
+    "duration": 480,
+    "start_time": "2021-07-27T20:58:27.862Z"
+   },
+   {
+    "duration": 19,
+    "start_time": "2021-07-27T20:58:51.631Z"
+   },
+   {
+    "duration": 271,
+    "start_time": "2021-07-27T20:59:29.631Z"
+   },
+   {
+    "duration": 17,
+    "start_time": "2021-07-27T20:59:46.423Z"
+   },
+   {
+    "duration": 2254,
+    "start_time": "2021-07-27T21:04:33.874Z"
+   },
+   {
+    "duration": 2277,
+    "start_time": "2021-07-27T21:04:57.906Z"
+   },
+   {
+    "duration": 11,
+    "start_time": "2021-07-27T21:05:33.267Z"
+   },
+   {
+    "duration": 268,
+    "start_time": "2021-07-27T21:06:26.059Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-27T21:06:48.341Z"
+   },
+   {
+    "duration": 8,
+    "start_time": "2021-07-27T21:07:08.235Z"
+   },
+   {
+    "duration": 6,
+    "start_time": "2021-07-27T21:07:10.083Z"
+   },
+   {
+    "duration": 1211,
+    "start_time": "2021-07-28T17:31:23.161Z"
+   },
+   {
+    "duration": 2005,
+    "start_time": "2021-07-28T17:31:24.916Z"
+   },
+   {
+    "duration": 269,
+    "start_time": "2021-07-28T17:31:28.946Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-07-28T17:31:49.928Z"
+   },
+   {
+    "duration": 1461,
+    "start_time": "2021-07-28T17:31:52.241Z"
+   },
+   {
+    "duration": -924,
+    "start_time": "2021-07-28T17:31:54.628Z"
+   },
+   {
+    "duration": 83164,
+    "start_time": "2021-07-28T17:32:16.580Z"
+   },
+   {
+    "duration": 11,
+    "start_time": "2021-07-28T17:34:50.405Z"
+   },
+   {
+    "duration": 1518,
+    "start_time": "2021-07-31T10:55:13.262Z"
+   },
+   {
+    "duration": 767,
+    "start_time": "2021-07-31T10:55:15.358Z"
+   },
+   {
+    "duration": 147780,
+    "start_time": "2021-07-31T10:55:17.767Z"
+   },
+   {
+    "duration": 15,
+    "start_time": "2021-07-31T10:58:47.905Z"
+   },
+   {
+    "duration": 533,
+    "start_time": "2021-07-31T10:59:17.297Z"
+   },
+   {
+    "duration": 1701,
+    "start_time": "2021-07-31T11:00:25.856Z"
+   },
+   {
+    "duration": 784,
+    "start_time": "2021-07-31T11:00:27.563Z"
+   },
+   {
+    "duration": 327376,
+    "start_time": "2021-07-31T11:00:29.104Z"
+   },
+   {
+    "duration": 21,
+    "start_time": "2021-07-31T11:13:03.959Z"
+   },
+   {
+    "duration": 134849,
+    "start_time": "2021-07-31T11:14:00.696Z"
+   },
+   {
+    "duration": 16,
+    "start_time": "2021-07-31T11:16:31.050Z"
+   },
+   {
+    "duration": 764,
+    "start_time": "2021-07-31T11:17:13.632Z"
+   },
+   {
+    "duration": 137,
+    "start_time": "2021-07-31T11:17:54.491Z"
+   },
+   {
+    "duration": 412,
+    "start_time": "2021-07-31T11:17:56.890Z"
+   },
+   {
+    "duration": 622,
+    "start_time": "2021-07-31T11:18:51.696Z"
+   },
+   {
+    "duration": 2413,
+    "start_time": "2021-07-31T11:22:01.064Z"
+   },
+   {
+    "duration": 774,
+    "start_time": "2021-07-31T11:22:04.046Z"
+   },
+   {
+    "duration": 11,
+    "start_time": "2021-07-31T11:22:11.084Z"
+   },
+   {
+    "duration": 533,
+    "start_time": "2021-07-31T11:23:29.885Z"
+   },
+   {
+    "duration": 3117,
+    "start_time": "2021-07-31T11:25:24.656Z"
+   },
+   {
+    "duration": 603,
+    "start_time": "2021-07-31T11:42:38.404Z"
+   },
+   {
+    "duration": 1654,
+    "start_time": "2021-07-31T11:43:16.234Z"
+   },
+   {
+    "duration": 801,
+    "start_time": "2021-07-31T11:43:23.508Z"
+   },
+   {
+    "duration": 455,
+    "start_time": "2021-07-31T11:43:26.472Z"
+   },
+   {
+    "duration": 5464,
+    "start_time": "2021-07-31T11:43:33.511Z"
+   },
+   {
+    "duration": 121,
+    "start_time": "2021-07-31T11:45:43.803Z"
+   },
+   {
+    "duration": 1551,
+    "start_time": "2021-07-31T11:49:11.234Z"
+   },
+   {
+    "duration": 892,
+    "start_time": "2021-07-31T11:49:12.788Z"
+   },
+   {
+    "duration": 336160,
+    "start_time": "2021-07-31T11:49:14.617Z"
+   },
+   {
+    "duration": 32,
+    "start_time": "2021-07-31T11:54:50.780Z"
+   },
+   {
+    "duration": 532,
+    "start_time": "2021-07-31T11:56:06.494Z"
+   },
+   {
+    "duration": 11527,
+    "start_time": "2021-07-31T11:56:47.523Z"
+   },
+   {
+    "duration": 16,
+    "start_time": "2021-07-31T11:56:59.054Z"
+   },
+   {
+    "duration": 373,
+    "start_time": "2021-07-31T11:59:25.695Z"
+   },
+   {
+    "duration": 375,
+    "start_time": "2021-07-31T11:59:42.246Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-31T11:59:58.339Z"
+   },
+   {
+    "duration": 365,
+    "start_time": "2021-07-31T11:59:59.316Z"
+   },
+   {
+    "duration": 363,
+    "start_time": "2021-07-31T12:00:14.859Z"
+   },
+   {
+    "duration": 3111,
+    "start_time": "2021-07-31T12:01:37.556Z"
+   },
+   {
+    "duration": 1137,
+    "start_time": "2021-07-31T17:23:04.806Z"
+   },
+   {
+    "duration": 1164,
+    "start_time": "2021-07-31T17:23:13.971Z"
+   },
+   {
+    "duration": 619,
+    "start_time": "2021-07-31T17:23:16.328Z"
+   },
+   {
+    "duration": 59,
+    "start_time": "2021-07-31T17:23:19.821Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-31T17:23:32.656Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-31T17:23:49.374Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-31T17:23:57.341Z"
+   },
+   {
+    "duration": 325,
+    "start_time": "2021-07-31T17:24:23.510Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-07-31T17:24:26.126Z"
+   },
+   {
+    "duration": 205,
+    "start_time": "2021-07-31T17:27:06.991Z"
+   },
+   {
+    "duration": 1078,
+    "start_time": "2021-07-31T17:27:10.741Z"
+   },
+   {
+    "duration": 633,
+    "start_time": "2021-07-31T17:27:11.820Z"
+   },
+   {
+    "duration": 2368,
+    "start_time": "2021-07-31T17:27:12.454Z"
+   },
+   {
+    "duration": 188,
+    "start_time": "2021-07-31T17:27:24.271Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-07-31T17:27:32.909Z"
+   },
+   {
+    "duration": 8412,
+    "start_time": "2021-07-31T17:27:47.977Z"
+   },
+   {
+    "duration": 231,
+    "start_time": "2021-07-31T17:28:10.232Z"
+   },
+   {
+    "duration": 7,
+    "start_time": "2021-07-31T17:28:14.393Z"
+   },
+   {
+    "duration": 110,
+    "start_time": "2021-07-31T17:28:38.184Z"
+   },
+   {
+    "duration": 278,
+    "start_time": "2021-07-31T17:28:51.722Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-07-31T17:28:54.796Z"
+   },
+   {
+    "duration": 138285,
+    "start_time": "2021-07-31T17:29:12.434Z"
+   },
+   {
+    "duration": 4924,
+    "start_time": "2021-08-04T16:59:28.461Z"
+   },
+   {
+    "duration": 665,
+    "start_time": "2021-08-04T16:59:33.387Z"
+   },
+   {
+    "duration": 216,
+    "start_time": "2021-08-04T17:02:57.497Z"
+   },
+   {
+    "duration": 7,
+    "start_time": "2021-08-04T17:04:13.457Z"
+   },
+   {
+    "duration": 152,
+    "start_time": "2021-08-04T17:13:50.774Z"
+   },
+   {
+    "duration": 2348,
+    "start_time": "2021-08-04T17:14:33.615Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T17:15:18.146Z"
+   },
+   {
+    "duration": 8592,
+    "start_time": "2021-08-04T17:15:28.379Z"
+   },
+   {
+    "duration": 9,
+    "start_time": "2021-08-04T17:15:38.275Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T17:15:51.026Z"
+   },
+   {
+    "duration": 15,
+    "start_time": "2021-08-04T17:16:06.924Z"
+   },
+   {
+    "duration": 597,
+    "start_time": "2021-08-04T17:16:24.195Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T17:17:23.291Z"
+   },
+   {
+    "duration": 197,
+    "start_time": "2021-08-04T17:17:28.229Z"
+   },
+   {
+    "duration": 5336,
+    "start_time": "2021-08-04T17:18:59.149Z"
+   },
+   {
+    "duration": 1266,
+    "start_time": "2021-08-04T17:19:04.487Z"
+   },
+   {
+    "duration": 246,
+    "start_time": "2021-08-04T17:19:05.755Z"
+   },
+   {
+    "duration": 7,
+    "start_time": "2021-08-04T17:19:06.003Z"
+   },
+   {
+    "duration": 2349,
+    "start_time": "2021-08-04T17:19:06.011Z"
+   },
+   {
+    "duration": 921,
+    "start_time": "2021-08-04T17:19:20.715Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T17:19:30.521Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T17:19:36.871Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T17:19:43.158Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T17:20:06.811Z"
+   },
+   {
+    "duration": 1531,
+    "start_time": "2021-08-04T17:20:16.169Z"
+   },
+   {
+    "duration": 1089427,
+    "start_time": "2021-08-04T17:20:26.049Z"
+   },
+   {
+    "duration": 8,
+    "start_time": "2021-08-04T17:38:48.414Z"
+   },
+   {
+    "duration": 29,
+    "start_time": "2021-08-04T17:39:13.739Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T17:39:22.707Z"
+   },
+   {
+    "duration": 225,
+    "start_time": "2021-08-04T17:40:37.882Z"
+   },
+   {
+    "duration": 181,
+    "start_time": "2021-08-04T17:40:42.749Z"
+   },
+   {
+    "duration": 4840,
+    "start_time": "2021-08-04T17:40:52.767Z"
+   },
+   {
+    "duration": 630,
+    "start_time": "2021-08-04T17:40:57.609Z"
+   },
+   {
+    "duration": 222,
+    "start_time": "2021-08-04T17:41:01.154Z"
+   },
+   {
+    "duration": 7,
+    "start_time": "2021-08-04T17:41:01.932Z"
+   },
+   {
+    "duration": 2389,
+    "start_time": "2021-08-04T17:41:04.588Z"
+   },
+   {
+    "duration": 185,
+    "start_time": "2021-08-04T17:41:06.979Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T17:41:07.166Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T17:41:10.470Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T17:41:11.043Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T17:41:12.819Z"
+   },
+   {
+    "duration": 1650,
+    "start_time": "2021-08-04T17:41:13.700Z"
+   },
+   {
+    "duration": 1126154,
+    "start_time": "2021-08-04T17:41:15.814Z"
+   },
+   {
+    "duration": 11,
+    "start_time": "2021-08-04T18:00:08.263Z"
+   },
+   {
+    "duration": 28,
+    "start_time": "2021-08-04T18:00:09.628Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:00:11.636Z"
+   },
+   {
+    "duration": 2,
+    "start_time": "2021-08-04T18:00:15.114Z"
+   },
+   {
+    "duration": 6,
+    "start_time": "2021-08-04T18:01:33.723Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:02:20.103Z"
+   },
+   {
+    "duration": 6623,
+    "start_time": "2021-08-04T18:02:41.633Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:03:02.914Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:03:13.466Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:03:26.313Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:03:30.005Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:03:37.406Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:03:44.012Z"
+   },
+   {
+    "duration": 434321,
+    "start_time": "2021-08-04T18:03:51.167Z"
+   },
+   {
+    "duration": 2,
+    "start_time": "2021-08-04T18:11:14.466Z"
+   },
+   {
+    "duration": 7,
+    "start_time": "2021-08-04T18:11:15.195Z"
+   },
+   {
+    "duration": 836480,
+    "start_time": "2021-08-04T18:11:16.044Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:25:42.347Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T18:25:43.028Z"
+   },
+   {
+    "duration": 20,
+    "start_time": "2021-08-04T18:25:57.956Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:27:52.264Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:28:01.549Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:28:08.956Z"
+   },
+   {
+    "duration": 1174,
+    "start_time": "2021-08-04T18:28:57.996Z"
+   },
+   {
+    "duration": 1334,
+    "start_time": "2021-08-04T18:29:42.712Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T18:29:55.366Z"
+   },
+   {
+    "duration": 731,
+    "start_time": "2021-08-04T18:29:59.888Z"
+   },
+   {
+    "duration": 238,
+    "start_time": "2021-08-04T18:30:06.987Z"
+   },
+   {
+    "duration": 7,
+    "start_time": "2021-08-04T18:30:09.577Z"
+   },
+   {
+    "duration": 2617,
+    "start_time": "2021-08-04T18:30:12.081Z"
+   },
+   {
+    "duration": 265,
+    "start_time": "2021-08-04T18:30:17.896Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:30:20.371Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:30:20.836Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:30:21.360Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:30:23.540Z"
+   },
+   {
+    "duration": 1614,
+    "start_time": "2021-08-04T18:30:28.466Z"
+   },
+   {
+    "duration": 1208834,
+    "start_time": "2021-08-04T18:30:31.673Z"
+   },
+   {
+    "duration": 8,
+    "start_time": "2021-08-04T18:51:16.844Z"
+   },
+   {
+    "duration": 30,
+    "start_time": "2021-08-04T18:51:17.420Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:51:17.923Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:51:18.511Z"
+   },
+   {
+    "duration": 6,
+    "start_time": "2021-08-04T18:51:19.138Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T18:51:19.686Z"
+   },
+   {
+    "duration": 6949,
+    "start_time": "2021-08-04T18:51:20.198Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:51:27.149Z"
+   },
+   {
+    "duration": 5,
+    "start_time": "2021-08-04T18:51:27.155Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T18:51:51.875Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:51:53.803Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T18:51:55.510Z"
+   },
+   {
+    "duration": 946329,
+    "start_time": "2021-08-04T18:52:29.796Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T19:08:20.534Z"
+   },
+   {
+    "duration": 4,
+    "start_time": "2021-08-04T19:08:21.165Z"
+   },
+   {
+    "duration": 21,
+    "start_time": "2021-08-04T19:08:21.740Z"
+   },
+   {
+    "duration": 3,
+    "start_time": "2021-08-04T20:40:08.188Z"
+   },
+   {
+    "duration": 276,
+    "start_time": "2021-08-04T20:40:14.646Z"
+   }
+  ],
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.8"
+  },
+  "toc": {
+   "base_numbering": 1,
+   "nav_menu": {},
+   "number_sections": true,
+   "sideBar": true,
+   "skip_h1_title": true,
+   "title_cell": "Содержание",
+   "title_sidebar": "Contents",
+   "toc_cell": true,
+   "toc_position": {
+    "height": "calc(100% - 180px)",
+    "left": "10px",
+    "top": "150px",
+    "width": "302.391px"
+   },
+   "toc_section_display": true,
+   "toc_window_display": false
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
