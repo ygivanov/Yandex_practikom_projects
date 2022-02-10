@@ -19,4 +19,4 @@
 - SKlearn 
 - Re
 - Nltk 
--tf-idf
+- tf-idf
